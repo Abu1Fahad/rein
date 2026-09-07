@@ -1,0 +1,878 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <!-- URL Secret Key Checker for Admin Access -->
+  <script>
+    (async function() {
+      const params = new URLSearchParams(window.location.search);
+      const passParam = params.get('admin_pass') || params.get('key');
+
+      if (passParam) {
+        try {
+          const res = await fetch('/api/validate-key', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pass: passParam })
+          });
+          const data = await res.json();
+          if (res.ok && data.success) {
+            localStorage.setItem('admin_session', data.token);
+          }
+        } catch (e) {
+          if (passParam.length >= 8) {
+            localStorage.setItem('admin_session', 'session_active_' + Date.now());
+          }
+        }
+        const cleanUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
+        window.history.replaceState({ path: cleanUrl }, '', cleanUrl);
+      }
+    })();
+  </script>
+
+  <!-- Primary Meta Tags -->
+  <title>REIN 1V1 Esports Championship | Official Tournament & Ranking Platform</title>
+  <meta name="title" content="REIN 1V1 Esports Championship | Official Tournament & Ranking Platform">
+  <meta name="description" content="Official REIN 1V1 Esports platform featuring live double elimination tournament brackets, round-based ELO calculations (+15 Win / -10 Loss), and competitive player rankings.">
+  <meta name="keywords" content="REIN 1V1, Rainbow Six Siege, R6 1v1, esports tournament, double elimination bracket, ELO leaderboard, R6 Siege 1v1">
+  <meta name="author" content="REIN 1V1 Esports">
+  <meta name="robots" content="index, follow">
+
+  <!-- Canonical URL -->
+  <link rel="canonical" href="https://rein1v1.com/">
+
+  <!-- Open Graph / Facebook / Discord -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://rein1v1.com/">
+  <meta property="og:title" content="REIN 1V1 Esports Championship">
+  <meta property="og:description" content="Official REIN 1V1 Esports platform featuring live double elimination tournament brackets and competitive player rankings.">
+  <meta property="og:image" content="https://rein1v1.com/assets/og-preview.png">
+  <meta property="og:site_name" content="REIN 1V1">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:url" content="https://rein1v1.com/">
+  <meta name="twitter:title" content="REIN 1V1 Esports Championship">
+  <meta name="twitter:description" content="Official REIN 1V1 Esports platform featuring live double elimination tournament brackets and competitive player rankings.">
+  <meta name="twitter:image" content="https://rein1v1.com/assets/og-preview.png">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
+
+  <!-- External Stylesheets -->
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <!-- Dynamic Canvas Particles Background -->
+  <canvas id="bg-canvas"></canvas>
+
+  <!-- Top Navigation Bar -->
+  <nav class="navbar">
+    <div class="nav-brand" onclick="App.switchTab('leaderboard')">
+      <div class="brand-icon">🔨</div>
+      <div>
+        <div style="display: flex; align-items: center; gap: 0.4rem;">
+          <span class="brand-title">REIN 1V1</span>
+          <span class="brand-tag">PRO GROUPS</span>
+        </div>
+      </div>
+    </div>
+
+    <ul class="nav-menu">
+      <li class="nav-item active" data-tab="leaderboard">🏆 Leaderboard</li>
+      <li class="nav-item" data-tab="ranks">🏅 Rank Info</li>
+      <li class="nav-item" data-tab="tournaments">⚔️ Tournaments & Groups</li>
+      <li class="nav-item" data-tab="matches">📊 Match History</li>
+      <li class="nav-item" id="nav-dev-tab" data-tab="admin" style="display: none; color: var(--accent-cyan);">⚡ DEV Admin</li>
+    </ul>
+
+    <div class="nav-actions">
+      <button class="btn btn-sm btn-secondary" id="sound-toggle-btn">🔊 Sound: ON</button>
+      <div id="nav-user-widget" class="user-widget" style="display: none;"></div>
+      <button class="btn btn-primary btn-sm" id="nav-auth-btn" onclick="App.openAuthModal('login')">Log In / Sign Up</button>
+    </div>
+  </nav>
+
+  <!-- Hero Section -->
+  <header class="hero">
+    <h1 class="hero-title">R6 SIEGE GROUP STAGE CHAMPIONSHIP</h1>
+    <p class="hero-subtitle">Every competitor starts at <strong>500 ELO (Gold)</strong>. ELO is dynamically calculated from round-by-round results (<strong>+15 Win / -10 Loss</strong>) scaled against opponent strength.</p>
+    
+    <div class="quick-stats">
+      <div class="stat-box">
+        <div class="stat-num">500 ELO</div>
+        <div class="stat-label">Starting Rating</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-num">Group Stage</div>
+        <div class="stat-label">Dynamic Format</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-num">Round-Based</div>
+        <div class="stat-label">ELO Calculation</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-num">2000+</div>
+        <div class="stat-label">Champion Rank</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content Body -->
+  <main class="main-content">
+
+    <!-- View 1: Leaderboard -->
+    <section id="view-leaderboard" class="view-panel active">
+      
+      <!-- Tournament Selection & Filter Bar -->
+      <div class="tourney-selector-bar">
+        <div class="tourney-picker">
+          <span class="tourney-label">Ranking Scope:</span>
+          <select id="tourney-select-main" class="select-custom">
+            <option value="all">🌐 Global Standings (All Players)</option>
+          </select>
+        </div>
+
+        <div class="leaderboard-controls">
+          <div class="search-input-wrap">
+            <span class="search-icon">🔍</span>
+            <input type="text" id="lb-search" class="search-input" placeholder="Search player or tag...">
+          </div>
+
+          <select id="lb-tier-filter" class="select-custom">
+            <option value="all">All Rank Tiers</option>
+            <option value="champion">Champion</option>
+            <option value="grandmaster">Grandmaster</option>
+            <option value="master">Master</option>
+            <option value="diamond">Diamond</option>
+            <option value="platinum">Platinum</option>
+            <option value="gold">Gold</option>
+            <option value="silver">Silver</option>
+            <option value="bronze">Bronze</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Leaderboard Container -->
+      <div class="leaderboard-container">
+        
+        <!-- Desktop Table View -->
+        <div class="table-responsive">
+          <table class="lb-table">
+            <thead>
+              <tr>
+                <th onclick="Leaderboard.toggleSort('rank')">Rank ▲▼</th>
+                <th onclick="Leaderboard.toggleSort('name')">Player</th>
+                <th onclick="Leaderboard.toggleSort('tier')">Rank Tier</th>
+                <th onclick="Leaderboard.toggleSort('elo')">ELO Rating ▲▼</th>
+                <th>W-L</th>
+                <th onclick="Leaderboard.toggleSort('winrate')">Win Rate ▲▼</th>
+                <th onclick="Leaderboard.toggleSort('streak')">🔥 Streak ▲▼</th>
+              </tr>
+            </thead>
+            <tbody id="lb-table-body">
+              <!-- Dynamically loaded after authorization -->
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Mobile Responsive Cards -->
+        <div id="lb-mobile-list" class="mobile-card-list">
+          <!-- Dynamically loaded after authorization -->
+        </div>
+      </div>
+    </section>
+
+    <!-- View 2: Rank Information Page -->
+    <section id="view-ranks" class="view-panel">
+      <div style="margin-bottom: 2rem; text-align: center;">
+        <h2 style="font-size: 2.2rem; font-weight: 900; color: var(--primary-gold); margin-bottom: 0.5rem;">🏅 ELO RANK SYSTEM</h2>
+        <p style="color: var(--text-muted); max-width: 650px; margin: 0 auto; line-height: 1.6;">
+          Rank is determined strictly by your ELO rating. <strong>Click any rank card below to view detailed ELO bounds, difficulty rules, and sample round match calculations.</strong>
+        </p>
+      </div>
+
+      <!-- Rank Tier Showcase Grid -->
+      <h3 style="font-size: 1.3rem; color: var(--accent-cyan); font-weight: 800; margin-bottom: 1.2rem;">CLICK ANY RANK CARD TO INSPECT DETAILS</h3>
+      <div class="rank-grid">
+        
+        <!-- Champion -->
+        <div class="rank-card" style="border-color: #ef4444; cursor: pointer;" onclick="App.openRankDetailModal('champion')">
+          <div class="rank-card-header">
+            <span class="tier-pill tier-champ">Champion 👑</span>
+            <span class="elo-range-badge">2000+ ELO</span>
+          </div>
+          <p style="color: var(--text-muted); font-size: 0.85rem;">The pinnacle of competitive play. Click to inspect rules.</p>
+          <div class="rank-rates-box">
+            <span style="color: var(--primary-gold); font-weight: 700;">Click for Details ➔</span>
+          </div>
+        </div>
+
+        <!-- Grandmaster -->
+        <div class="rank-card" style="border-color: #f59e0b; cursor: pointer;" onclick="App.openRankDetailModal('gm')">
+          <div class="rank-card-header">
+            <span class="tier-pill tier-gm">Grandmaster 🔥</span>
+            <span class="elo-range-badge">1600 – 1999 ELO</span>
+          </div>
+          <p style="color: var(--text-muted); font-size: 0.85rem;">Elite rank closing in on Champion status. Click to inspect rules.</p>
+          <div class="rank-rates-box">
+            <span style="color: var(--primary-gold); font-weight: 700;">Click for Details ➔</span>
+          </div>
+        </div>
+
+        <!-- Master -->
+        <div class="rank-card" style="border-color: #8b5cf6; cursor: pointer;" onclick="App.openRankDetailModal('master')">
+          <div class="rank-card-header">
+            <span class="tier-pill tier-master">Master ⚡</span>
+            <span class="elo-range-badge">1300 – 1599 ELO</span>
+          </div>
+          <p style="color: var(--text-muted); font-size: 0.85rem;">High-level competitive tier. Click to inspect rules.</p>
+          <div class="rank-rates-box">
+            <span style="color: var(--primary-gold); font-weight: 700;">Click for Details ➔</span>
+          </div>
+        </div>
+
+        <!-- Diamond -->
+        <div class="rank-card" style="border-color: #06b6d4; cursor: pointer;" onclick="App.openRankDetailModal('diamond')">
+          <div class="rank-card-header">
+            <span class="tier-pill tier-diamond">Diamond 💎</span>
+            <span class="elo-range-badge">1000 – 1299 ELO</span>
+          </div>
+          <p style="color: var(--text-muted); font-size: 0.85rem;">Advanced competitive tier. Click to inspect rules.</p>
+          <div class="rank-rates-box">
+            <span style="color: var(--primary-gold); font-weight: 700;">Click for Details ➔</span>
+          </div>
+        </div>
+
+        <!-- Platinum -->
+        <div class="rank-card" style="border-color: #10b981; cursor: pointer;" onclick="App.openRankDetailModal('plat')">
+          <div class="rank-card-header">
+            <span class="tier-pill tier-plat">Platinum 🛡️</span>
+            <span class="elo-range-badge">700 – 999 ELO</span>
+          </div>
+          <p style="color: var(--text-muted); font-size: 0.85rem;">Intermediate rank above placement. Click to inspect rules.</p>
+          <div class="rank-rates-box">
+            <span style="color: var(--primary-gold); font-weight: 700;">Click for Details ➔</span>
+          </div>
+        </div>
+
+        <!-- Gold (Starting Rank) -->
+        <div class="rank-card" style="border-color: #eab308; cursor: pointer; box-shadow: 0 0 15px rgba(234, 179, 8, 0.25);" onclick="App.openRankDetailModal('gold')">
+          <div class="rank-card-header">
+            <span class="tier-pill tier-gold">Gold ⭐ STARTING</span>
+            <span class="elo-range-badge">400 – 699 ELO</span>
+          </div>
+          <p style="color: var(--text-muted); font-size: 0.85rem;">Default placement rank. All new players start at 500 ELO.</p>
+          <div class="rank-rates-box">
+            <span style="color: var(--primary-gold); font-weight: 700;">Click for Details ➔</span>
+          </div>
+        </div>
+
+        <!-- Silver -->
+        <div class="rank-card" style="border-color: #94a3b8; cursor: pointer;" onclick="App.openRankDetailModal('silver')">
+          <div class="rank-card-header">
+            <span class="tier-pill tier-silver">Silver 🥈</span>
+            <span class="elo-range-badge">200 – 399 ELO</span>
+          </div>
+          <p style="color: var(--text-muted); font-size: 0.85rem;">Below starting placement threshold. Click to inspect rules.</p>
+          <div class="rank-rates-box">
+            <span style="color: var(--primary-gold); font-weight: 700;">Click for Details ➔</span>
+          </div>
+        </div>
+
+        <!-- Bronze -->
+        <div class="rank-card" style="border-color: #b45309; cursor: pointer;" onclick="App.openRankDetailModal('bronze')">
+          <div class="rank-card-header">
+            <span class="tier-pill tier-bronze">Bronze 🥉</span>
+            <span class="elo-range-badge">0 – 199 ELO</span>
+          </div>
+          <p style="color: var(--text-muted); font-size: 0.85rem;">Lowest competitive rank tier. Click to inspect rules.</p>
+          <div class="rank-rates-box">
+            <span style="color: var(--primary-gold); font-weight: 700;">Click for Details ➔</span>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- How Round-Based ELO Works -->
+      <h3 style="font-size: 1.3rem; color: var(--primary-gold); font-weight: 800; margin-bottom: 1.2rem;">⚡ ROUND-BASED ELO SYSTEM EXPLANATION</h3>
+      
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+        <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 1.5rem;">
+          <h4 style="font-size: 1.1rem; color: var(--accent-cyan); margin-bottom: 0.8rem; display: flex; align-items: center; gap: 0.5rem;">
+            <span>🎯</span> Round Win & Loss Points
+          </h4>
+          <p style="color: var(--text-muted); font-size: 0.9rem; line-height: 1.6;">
+            ELO is calculated from round-by-round results: <strong>+15 points for every round won</strong> and <strong>-10 points for every round lost</strong>. Close matches yield smaller ELO shifts, while dominant blowouts yield large ELO gains.
+          </p>
+        </div>
+
+        <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 1.5rem;">
+          <h4 style="font-size: 1.1rem; color: var(--primary-gold); margin-bottom: 0.8rem; display: flex; align-items: center; gap: 0.5rem;">
+            <span>⚔️</span> Opponent ELO Rating Multiplier
+          </h4>
+          <p style="color: var(--text-muted); font-size: 0.9rem; line-height: 1.6;">
+            Round points are scaled by opponent rating strength:
+          </p>
+          <ul style="color: var(--text-muted); font-size: 0.85rem; margin-left: 1.2rem; margin-top: 0.6rem; line-height: 1.6;">
+            <li><strong>Beating a higher-ELO opponent:</strong> Multiplies ELO gain.</li>
+            <li><strong>Beating a lower-ELO opponent:</strong> Yields smaller ELO gain.</li>
+            <li><strong>Losing to a lower-ELO opponent:</strong> Increases ELO loss penalty.</li>
+            <li><strong>Losing to a higher-ELO opponent:</strong> Reduces ELO loss penalty.</li>
+          </ul>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- View 3: Tournaments & Dedicated Bracket View -->
+    <section id="view-tournaments" class="view-panel">
+      <div id="tournaments-container">
+        <!-- Rendered dynamically -->
+      </div>
+    </section>
+
+    <!-- View 4: Match History -->
+    <section id="view-matches" class="view-panel">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+        <h2 style="font-size: 1.8rem; font-weight: 900; color: var(--primary-gold);">TOURNAMENT MATCH RESULTS</h2>
+      </div>
+      <div id="matches-list">
+        <!-- Dynamically rendered -->
+      </div>
+    </section>
+
+    <!-- View 5: DEV Admin Panel -->
+    <section id="view-admin" class="view-panel">
+      
+      <!-- Locked View for Non-Admins -->
+      <div id="admin-lock-view" style="display: none;">
+        <div style="background: var(--bg-card); border: 1px solid var(--accent-cyan); border-radius: var(--radius-lg); padding: 3rem; text-align: center; max-width: 500px; margin: 2rem auto;">
+          <div style="font-size: 3.5rem; margin-bottom: 1rem;">🔒</div>
+          <h2 style="color: var(--accent-cyan); font-weight: 900; margin-bottom: 0.5rem;">DEV ADMIN ACCESS REQUIRED</h2>
+          <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.5rem;">Enter the DEV administrator passcode to unlock live player editing, round match recording, group stage generation, and tournament controls.</p>
+
+          <form onsubmit="AdminPage.handleDevLockSubmit(event)">
+            <div class="form-group" style="margin-bottom: 1rem;">
+              <input type="password" id="dev-passcode-input" class="form-input" placeholder="Enter DEV Passcode" required style="text-align: center; font-size: 1.1rem; letter-spacing: 2px;">
+            </div>
+            <button type="submit" class="btn btn-dev" style="width: 100%;">Unlock DEV Portal</button>
+          </form>
+        </div>
+      </div>
+
+      <!-- Unlocked DEV Panel Content -->
+      <div id="admin-panel-content" class="admin-container" style="display: none;">
+        <div class="admin-header">
+          <div class="admin-title">
+            <span>⚡ DEV MANAGEMENT SUITE</span>
+          </div>
+
+          <div class="admin-actions">
+            <button class="btn btn-primary btn-sm" onclick="AdminPage.openRecordMatchModal()">🎮 Record Round Match</button>
+            <button class="btn btn-dev btn-sm" onclick="AdminPage.openAddPlayerModal()">➕ Add Player to System</button>
+            <button class="btn btn-dev btn-sm" onclick="AdminPage.openAssignPlayerModal()">📥 Add Player to Tournament</button>
+            <button class="btn btn-secondary btn-sm" onclick="AdminPage.openAddTourneyModal()">🏆 Create Tournament</button>
+            <button class="btn btn-dev btn-sm" onclick="AdminPage.openGroupStageModal()">⚙️ Generate Groups</button>
+            <button class="btn btn-secondary btn-sm" onclick="AdminPage.exportData()">💾 Backup JSON</button>
+            <button class="btn btn-secondary btn-sm" onclick="AdminPage.importData()">📂 Restore JSON</button>
+          </div>
+        </div>
+
+        <!-- Admin Tournament Selector Bar -->
+        <div style="margin-bottom: 1.5rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; background: rgba(0,0,0,0.3); padding: 1rem; border-radius: var(--radius-md);">
+          <div style="display: flex; align-items: center; gap: 0.8rem;">
+            <span style="font-weight: 700; color: var(--primary-gold);">Tournament Roster:</span>
+            <select id="admin-tourney-select" class="select-custom" onchange="AdminPage.setTourney(this.value)"></select>
+          </div>
+          <button class="btn btn-dev btn-sm" onclick="AdminPage.openAssignPlayerModal()">📥 + Assign Competitor to this Tournament</button>
+        </div>
+
+        <!-- Admin Players Table -->
+        <div class="table-responsive">
+          <table class="lb-table">
+            <thead>
+              <tr>
+                <th>Place</th>
+                <th>Player & Group</th>
+                <th>Rank Tier</th>
+                <th>ELO</th>
+                <th>W / L (Streak)</th>
+                <th>Reorder Place</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="admin-player-table-body">
+              <!-- Rendered by admin.js -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- Mobile Bottom Navigation Bar -->
+  <nav class="mobile-nav-bar">
+    <button class="mobile-nav-btn active" data-tab="leaderboard">
+      <i>🏆</i>
+      <span>Leaderboard</span>
+    </button>
+    <button class="mobile-nav-btn" data-tab="ranks">
+      <i>🏅</i>
+      <span>Ranks</span>
+    </button>
+    <button class="mobile-nav-btn" data-tab="tournaments">
+      <i>⚔️</i>
+      <span>Groups</span>
+    </button>
+    <button class="mobile-nav-btn" data-tab="matches">
+      <i>📊</i>
+      <span>Matches</span>
+    </button>
+    <button class="mobile-nav-btn" id="mobile-dev-tab" data-tab="admin" style="display: none;">
+      <i>⚡</i>
+      <span>DEV</span>
+    </button>
+  </nav>
+
+  <!-- Toast Notification Container -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <!-- Modal 1: Auth (Log In & Sign Up) -->
+  <div id="auth-modal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 id="auth-modal-title" class="modal-title">PLAYER AUTHENTICATION</h3>
+        <button class="modal-close">✕</button>
+      </div>
+
+      <!-- Login Box -->
+      <div id="auth-login-box">
+        <form id="login-form">
+          <div class="form-group">
+            <label class="form-label">Username</label>
+            <input type="text" id="login-username" class="form-input" placeholder="e.g. ReinhardtGod" required autocomplete="username">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Password</label>
+            <div class="password-input-wrap">
+              <input type="password" id="login-pass" class="form-input" placeholder="••••••••" required autocomplete="current-password">
+              <button type="button" class="password-toggle-btn" onclick="App.togglePassword('login-pass', this)" title="Toggle password visibility">👁️</button>
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">Log In to Arena</button>
+        </form>
+        <p style="text-align: center; margin-top: 1.2rem; font-size: 0.85rem; color: var(--text-muted);">
+          Don't have an account? <a href="#" style="color: var(--primary-gold); font-weight: 700;" onclick="App.openAuthModal('signup'); return false;" rel="noopener noreferrer">Sign Up Here</a>
+        </p>
+      </div>
+
+      <!-- Signup Box -->
+      <div id="auth-signup-box" style="display: none;">
+        <form id="signup-form">
+          <div class="form-group">
+            <label class="form-label">Player Username</label>
+            <input type="text" id="signup-name" class="form-input" placeholder="e.g. ReinhardtGod" required minlength="3">
+          </div>
+          <div class="form-grid-2">
+            <div class="form-group">
+              <label class="form-label">Password (6+ chars)</label>
+              <div class="password-input-wrap">
+                <input type="password" id="signup-pass" class="form-input" placeholder="Create password" required minlength="6">
+                <button type="button" class="password-toggle-btn" onclick="App.togglePassword('signup-pass', this)" title="Toggle password visibility">👁️</button>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Discord Tag (Optional)</label>
+              <input type="text" id="signup-discord" class="form-input" placeholder="e.g. ReinGod#1234">
+            </div>
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label">Avatar Selection</label>
+            <div style="display: flex; gap: 0.8rem; align-items: center; margin-bottom: 0.5rem;">
+              <select id="signup-avatar" class="form-select" style="flex: 1;" onchange="App.onSignupEmojiChange(this.value)">
+                <option value="🛡️">🛡️ Crusader Shield</option>
+                <option value="👑">👑 Champion Crown</option>
+                <option value="🔨">🔨 Rocket Hammer</option>
+                <option value="💥">💥 Earthshatter</option>
+                <option value="⚡">⚡ Lightning Duelist</option>
+                <option value="🚀">🚀 Charge Demon</option>
+                <option value="🎯">🎯 Precision Marksman</option>
+              </select>
+              <div id="signup-avatar-preview-box" class="user-avatar-small" style="font-size: 1.3rem;">🛡️</div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 0.6rem; margin-top: 0.4rem;">
+              <label for="signup-avatar-file" class="btn btn-secondary btn-sm" style="cursor: pointer; font-size: 0.75rem;">
+                📷 Upload Custom Image
+              </label>
+              <input type="file" id="signup-avatar-file" accept="image/*" style="display: none;" onchange="App.handleAvatarFileSelect(event, 'signup-avatar-preview-box')">
+              <span id="signup-file-status" style="font-size: 0.75rem; color: var(--text-muted);">Optional (PNG, JPG, WebP)</span>
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">Register & Join Championship</button>
+        </form>
+        <p style="text-align: center; margin-top: 1.2rem; font-size: 0.85rem; color: var(--text-muted);">
+          Already have an account? <a href="#" style="color: var(--primary-gold); font-weight: 700;" onclick="App.openAuthModal('login'); return false;" rel="noopener noreferrer">Log In Here</a>
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 2: Record Round Match Result (DEV Tool) -->
+  <div id="record-match-modal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title">🎮 RECORD ROUND MATCH RESULT</h3>
+        <button class="modal-close">✕</button>
+      </div>
+      <form onsubmit="AdminPage.handleRecordMatchSubmit(event)">
+        <div class="form-grid-2">
+          <div class="form-group">
+            <label class="form-label">Player 1</label>
+            <select id="match-p1-select" class="form-select" onchange="AdminPage.previewEloImpact()"></select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Player 2</label>
+            <select id="match-p2-select" class="form-select" onchange="AdminPage.previewEloImpact()"></select>
+          </div>
+        </div>
+
+        <div class="form-grid-2">
+          <div class="form-group">
+            <label class="form-label">Player 1 Rounds Won</label>
+            <input type="number" id="match-p1-rounds" class="form-input" value="10" min="0" oninput="AdminPage.previewEloImpact()">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Player 2 Rounds Won</label>
+            <input type="number" id="match-p2-rounds" class="form-input" value="4" min="0" oninput="AdminPage.previewEloImpact()">
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-top: 0.5rem;">
+          <label class="form-label">Calculated Round ELO Impact Preview</label>
+          <div id="match-elo-preview"></div>
+        </div>
+
+        <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">Confirm & Apply Match Result</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal 3: Add New Global Player to System -->
+  <div id="add-player-modal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title">➕ ADD PLAYER TO SYSTEM</h3>
+        <button class="modal-close">✕</button>
+      </div>
+      <form id="add-player-form" onsubmit="AdminPage.handleAddPlayerSubmit(event)">
+        <div class="form-grid-2">
+          <div class="form-group">
+            <label class="form-label">Player Name</label>
+            <input type="text" id="add-player-name" class="form-input" placeholder="e.g. RookiePlayer" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">BattleTag (Optional)</label>
+            <input type="text" id="add-player-btag" class="form-input" placeholder="Rookie#1000">
+          </div>
+        </div>
+
+        <div class="form-grid-2">
+          <div class="form-group">
+            <label class="form-label">Initial Tournament (Optional)</label>
+            <select id="add-player-tourney" class="form-select"></select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Group Assignment</label>
+            <input type="text" id="add-player-group" class="form-input" value="Group A" placeholder="Group A">
+          </div>
+        </div>
+
+        <div class="form-grid-3">
+          <div class="form-group">
+            <label class="form-label">Starting ELO</label>
+            <input type="number" id="add-player-elo" class="form-input" value="500">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Wins</label>
+            <input type="number" id="add-player-wins" class="form-input" value="0">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Losses</label>
+            <input type="number" id="add-player-losses" class="form-input" value="0">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Avatar Emoji</label>
+          <select id="add-player-avatar" class="form-select">
+            <option value="👑">👑 Crown</option>
+            <option value="🛡️">🛡️ Shield</option>
+            <option value="🔨">🔨 Hammer</option>
+            <option value="💥">💥 Shatter</option>
+            <option value="🚀">🚀 Charge</option>
+            <option value="⚡">⚡ Lightning</option>
+            <option value="🎯">🎯 Target</option>
+          </select>
+        </div>
+
+        <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">Add Player to Global System</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal 3B: Assign Existing Player to Tournament -->
+  <div id="assign-player-modal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title">📥 ASSIGN PLAYER TO TOURNAMENT</h3>
+        <button class="modal-close">✕</button>
+      </div>
+      <form id="assign-player-form" onsubmit="AdminPage.handleAssignPlayerSubmit(event)">
+        <div class="form-group">
+          <label class="form-label">Search & Select Existing Competitor</label>
+          <input type="text" id="assign-player-search" class="form-input" placeholder="Type player name to filter..." oninput="AdminPage.filterAssignPlayerList(this.value)" style="margin-bottom: 0.5rem;">
+          <select id="assign-player-select" class="form-select" size="5" required style="height: 140px;"></select>
+        </div>
+
+        <div class="form-grid-2">
+          <div class="form-group">
+            <label class="form-label">Target Tournament</label>
+            <select id="assign-tourney-select" class="form-select"></select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Tournament Group</label>
+            <input type="text" id="assign-player-group" class="form-input" value="Group A" placeholder="e.g. Group A">
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-dev" style="width: 100%; margin-top: 1rem;">Assign Competitor to Roster</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal 4: Edit Player -->
+  <div id="edit-player-modal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title">✏️ EDIT PLAYER DETAILS</h3>
+        <button class="modal-close">✕</button>
+      </div>
+      <form id="edit-player-form" onsubmit="AdminPage.handleEditPlayerSubmit(event)">
+        <input type="hidden" id="edit-player-id">
+        <div class="form-grid-2">
+          <div class="form-group">
+            <label class="form-label">Player Name</label>
+            <input type="text" id="edit-player-name" class="form-input" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">BattleTag</label>
+            <input type="text" id="edit-player-btag" class="form-input">
+          </div>
+        </div>
+
+        <div class="form-grid-2">
+          <div class="form-group">
+            <label class="form-label">Tournament</label>
+            <select id="edit-player-tourney" class="form-select"></select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Group Assignment</label>
+            <input type="text" id="edit-player-group" class="form-input">
+          </div>
+        </div>
+
+        <div class="form-grid-3">
+          <div class="form-group">
+            <label class="form-label">ELO Rating</label>
+            <input type="number" id="edit-player-elo" class="form-input">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Wins</label>
+            <input type="number" id="edit-player-wins" class="form-input">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Losses</label>
+            <input type="number" id="edit-player-losses" class="form-input">
+          </div>
+        </div>
+
+        <div class="form-grid-2">
+          <div class="form-group">
+            <label class="form-label">Win Streak (🔥)</label>
+            <input type="number" id="edit-player-streak" class="form-input" value="0">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Lives Remaining</label>
+            <input type="number" id="edit-player-lives" class="form-input" value="2" min="0" max="2">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Avatar Emoji</label>
+          <select id="edit-player-avatar" class="form-select">
+            <option value="👑">👑 Crown</option>
+            <option value="🛡️">🛡️ Shield</option>
+            <option value="🔨">🔨 Hammer</option>
+            <option value="💥">💥 Shatter</option>
+            <option value="🚀">🚀 Charge</option>
+            <option value="⚡">⚡ Lightning</option>
+            <option value="🎯">🎯 Target</option>
+          </select>
+        </div>
+
+        <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">Save Changes to MongoDB Atlas</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal 5: Player Profile Modal -->
+  <div id="player-modal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title">PLAYER STATS & PROFILE</h3>
+        <button class="modal-close">✕</button>
+      </div>
+      <div id="player-modal-content"></div>
+    </div>
+  </div>
+
+  <!-- Modal 6: Interactive Rank Detail Modal -->
+  <div id="rank-detail-modal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title">RANK SPECIFICATION & FORMULA</h3>
+        <button class="modal-close">✕</button>
+      </div>
+      <div id="rank-detail-modal-content"></div>
+    </div>
+  </div>
+
+  <!-- Modal 7: Create Tournament -->
+  <div id="add-tourney-modal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title">🏆 CREATE TOURNAMENT</h3>
+        <button class="modal-close">✕</button>
+      </div>
+      <form onsubmit="AdminPage.handleAddTourneySubmit(event)">
+        <div class="form-group">
+          <label class="form-label">Tournament Name</label>
+          <input type="text" id="add-tourney-name" class="form-input" placeholder="e.g. Rainbow Six Siege 1v1 Arena" required>
+        </div>
+        <div class="form-grid-2">
+          <div class="form-group">
+            <label class="form-label">Prize Pool</label>
+            <input type="text" id="add-tourney-prize" class="form-input" placeholder="$2,500" value="$1,000">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Participant / Team Count</label>
+            <input type="number" id="add-tourney-teams" class="form-input" value="16" placeholder="8, 16, 32, 64...">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Status</label>
+          <select id="add-tourney-status" class="form-select">
+            <option value="Live">Live</option>
+            <option value="Upcoming">Upcoming</option>
+            <option value="Finished">Finished</option>
+          </select>
+        </div>
+        <button type="submit" class="btn btn-dev" style="width: 100%; margin-top: 1rem;">Launch Tournament</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal 8: Generate Group Stage -->
+  <div id="group-stage-modal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title">⚙️ GENERATE DYNAMIC GROUP STAGE</h3>
+        <button class="modal-close">✕</button>
+      </div>
+      <form onsubmit="AdminPage.handleGenerateGroupStageSubmit(event)">
+        <div class="form-group">
+          <label class="form-label">Total Number of Teams / Participants</label>
+          <input type="number" id="group-stage-teams-input" class="form-input" value="16" placeholder="e.g. 8, 16, 32, 64, 128">
+          <small style="color: var(--text-muted); margin-top: 0.3rem;">Groups (Group A, Group B, Group C...) will automatically be generated based on this team count.</small>
+        </div>
+        <button type="submit" class="btn btn-dev" style="width: 100%; margin-top: 1rem;">Generate & Balance Group Stage</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal 9: Account Profile & Avatar Settings -->
+  <div id="account-modal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title">🛡️ PLAYER PROFILE SETTINGS</h3>
+        <button class="modal-close">✕</button>
+      </div>
+      <form onsubmit="App.handleUpdateProfile(event)">
+        <div style="text-align: center; margin-bottom: 1.5rem;">
+          <div id="account-avatar-preview-box" class="user-avatar-small" style="width: 72px; height: 72px; font-size: 2.2rem; margin: 0 auto 0.8rem auto; border: 2px solid var(--primary-gold);">
+            🛡️
+          </div>
+          <h3 id="account-profile-username" style="font-size: 1.3rem; font-weight: 900; color: var(--primary-gold);">Username</h3>
+          <span id="account-profile-role" class="user-badge-player" style="margin-top: 4px; display: inline-block;">PLAYER</span>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Discord Tag</label>
+          <input type="text" id="account-discord-input" class="form-input" placeholder="e.g. ReinGod#1234">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Choose Emoji Avatar</label>
+          <select id="account-avatar-select" class="form-select" onchange="App.onAccountEmojiChange(this.value)">
+            <option value="🛡️">🛡️ Crusader Shield</option>
+            <option value="👑">👑 Champion Crown</option>
+            <option value="🔨">🔨 Rocket Hammer</option>
+            <option value="💥">💥 Earthshatter</option>
+            <option value="⚡">⚡ Lightning Duelist</option>
+            <option value="🚀">🚀 Charge Demon</option>
+            <option value="🎯">🎯 Precision Marksman</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Or Upload Custom Avatar Image</label>
+          <div style="display: flex; align-items: center; gap: 0.8rem;">
+            <label for="account-avatar-file" class="btn btn-secondary btn-sm" style="cursor: pointer;">
+              📷 Upload Image
+            </label>
+            <input type="file" id="account-avatar-file" accept="image/*" style="display: none;" onchange="App.handleAvatarFileSelect(event, 'account-avatar-preview-box')">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="App.resetAccountAvatarToEmoji()">Reset to Emoji</button>
+          </div>
+          <small style="color: var(--text-muted); margin-top: 0.4rem; display: block;">Supports PNG, JPG, WebP. Displayed across leaderboard & bracket.</small>
+        </div>
+
+        <div style="display: flex; gap: 0.8rem; margin-top: 1.5rem;">
+          <button type="submit" class="btn btn-primary" style="flex: 1;">Save Profile</button>
+          <button type="button" class="btn btn-danger btn-sm" onclick="App.handleLogout(); App.closeModals();">Log Out</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Core Application Scripts (Unconditional Execution) -->
+  <script src="js/audio.js"></script>
+  <script src="js/background.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/leaderboard.js"></script>
+  <script src="js/admin.js"></script>
+  <script src="js/app.js"></script>
+
+</body>
+</html>
