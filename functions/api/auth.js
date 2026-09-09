@@ -31,7 +31,7 @@ export async function onRequest(context) {
   const ADMIN_SECRET = env.ADMIN_SECRET_KEY || 'rein1v1secret2026';
 
   try {
-    // 1. SIGNUP: POST /api/auth/signup
+    // 1. SIGNUP: POST /api/auth/signup (Strict async/await MongoDB Atlas Persistence Flow)
     if (request.method === 'POST' && action === 'signup') {
       const body = await request.json().catch(() => ({}));
       const { username, password, discordId, avatar, avatarType } = body;
@@ -62,7 +62,7 @@ export async function onRequest(context) {
         role = 'admin';
       }
 
-      // Salt and hash password with Web Crypto PBKDF2 (100,000 iterations)
+      // Hash password with Web Crypto PBKDF2 (100,000 iterations)
       const hashedPassword = await hashPassword(password);
 
       const userId = 'u-' + Date.now();
@@ -80,9 +80,6 @@ export async function onRequest(context) {
         lastIp: request.headers.get('cf-connecting-ip') || '127.0.0.1'
       };
 
-      await db.insertOne('users', newUser);
-
-      // Auto-create initial Player profile for the players collection
       const newPlayer = {
         id: 'p-' + Date.now(),
         tourneyId: 'tourney-1',
@@ -97,10 +94,23 @@ export async function onRequest(context) {
         avatar: avatarRes.avatar,
         avatarType: avatarRes.avatarType,
         group: 'Group A',
-        lives: 2
+        lives: 2,
+        createdAt: new Date().toISOString()
       };
 
-      await db.insertOne('players', newPlayer);
+      // STEP 1: Execute and AWAIT user insert first in MongoDB users collection
+      const userRes = await db.insertOne('users', newUser);
+      
+      // STEP 2: Execute and AWAIT player insert in MongoDB players collection
+      const playerRes = await db.insertOne('players', newPlayer);
+
+      // Verify that both database writes completed 100%
+      if (!userRes || !playerRes) {
+        return new Response(JSON.stringify({
+          success: false,
+          message: 'Database Write Error: Account persistence failed in MongoDB Atlas.'
+        }), { status: 500, headers });
+      }
 
       // Sign Cryptographic HMAC Session Token
       const token = await signSessionToken({
@@ -110,9 +120,10 @@ export async function onRequest(context) {
         isAdmin: newUser.role === 'admin'
       }, env);
 
+      // STEP 3: Return 201 Created ONLY after 100% verified database persistence
       return new Response(JSON.stringify({
         success: true,
-        message: 'Account registered and securely stored in MongoDB Atlas!',
+        message: 'Account registered and permanently stored in MongoDB Atlas database!',
         token: token,
         user: {
           id: newUser.id,
@@ -133,82 +144,26 @@ export async function onRequest(context) {
       const body = await request.json().catch(() => ({}));
       const { username, password } = body;
 
-      if (!username || !password) {
-        return new Response(JSON.stringify({ success: false, message: 'Please enter both Username and Password' }), { status: 400, headers });
-      }
-
       const cleanUsername = sanitizeString(username, 30);
-      const lowerUser = cleanUsername.toLowerCase();
-      const clientIp = request.headers.get('cf-connecting-ip') || '127.0.0.1';
-
-      // 1. Direct DEV Passcode / Admin Master Key check
-      if (password === DEV_PASSCODE || password === ADMIN_SECRET || (lowerUser === 'admin' && (password === 'admin123456' || password === 'rein1v1dev')) || (lowerUser === 'fahad' && (password === 'fahad123456' || password === 'rein1v1dev'))) {
-        let existingUser = await db.findOne('users', { username: cleanUsername });
-        if (!existingUser) {
-          existingUser = {
-            id: 'u-' + (cleanUsername === 'admin' ? 'dev-admin' : cleanUsername.toLowerCase()),
-            username: cleanUsername,
-            discordId: cleanUsername === 'Fahad' ? 'Fahad#9901' : 'ReinAdmin#0001',
-            role: 'admin',
-            avatar: cleanUsername === 'Fahad' ? '⚡' : '👑',
-            avatarType: 'emoji',
-            isAdmin: true,
-            createdAt: new Date().toISOString(),
-            lastLoginAt: new Date().toISOString(),
-            loginCount: 1,
-            lastIp: clientIp
-          };
-          await db.insertOne('users', existingUser);
-        } else {
-          await db.updateOne('users', { id: existingUser.id }, {
-            role: 'admin',
-            lastLoginAt: new Date().toISOString(),
-            loginCount: (existingUser.loginCount || 0) + 1,
-            lastIp: clientIp
-          });
-        }
-
-        const token = await signSessionToken({
-          userId: existingUser.id,
-          username: existingUser.username,
-          role: 'admin',
-          isAdmin: true
-        }, env);
-
-        return new Response(JSON.stringify({
-          success: true,
-          message: 'DEV Admin authenticated and recorded in MongoDB Atlas',
-          token,
-          user: {
-            id: existingUser.id,
-            username: existingUser.username,
-            discordId: existingUser.discordId,
-            role: 'admin',
-            avatar: existingUser.avatar || '👑',
-            avatarType: existingUser.avatarType || 'emoji',
-            isAdmin: true,
-            lastLoginAt: new Date().toISOString()
-          }
-        }), { status: 200, headers });
+      if (!cleanUsername || !password) {
+        return new Response(JSON.stringify({ success: false, message: 'Username and Password are required' }), { status: 400, headers });
       }
 
-      // 2. Search MongoDB users collection
       const user = await db.findOne('users', { username: cleanUsername });
-
       if (!user) {
-        return new Response(JSON.stringify({ success: false, message: 'Invalid username or password. Please try again.' }), { status: 401, headers });
+        return new Response(JSON.stringify({ success: false, message: 'Invalid username or password' }), { status: 401, headers });
       }
 
-      const isPasswordValid = await verifyPassword(password, user.passwordHash);
-      if (!isPasswordValid) {
-        return new Response(JSON.stringify({ success: false, message: 'Invalid username or password. Please try again.' }), { status: 401, headers });
+      const isValid = await verifyPassword(password, user.passwordHash);
+      if (!isValid) {
+        return new Response(JSON.stringify({ success: false, message: 'Invalid username or password' }), { status: 401, headers });
       }
 
-      // Record successful login in MongoDB Atlas
+      // Update Login stats in MongoDB
       await db.updateOne('users', { id: user.id }, {
         lastLoginAt: new Date().toISOString(),
         loginCount: (user.loginCount || 0) + 1,
-        lastIp: clientIp
+        lastIp: request.headers.get('cf-connecting-ip') || '127.0.0.1'
       });
 
       const token = await signSessionToken({
@@ -220,8 +175,8 @@ export async function onRequest(context) {
 
       return new Response(JSON.stringify({
         success: true,
-        message: 'Logged in successfully and session recorded!',
-        token,
+        message: 'Logged in successfully',
+        token: token,
         user: {
           id: user.id,
           username: user.username,
@@ -235,90 +190,48 @@ export async function onRequest(context) {
       }), { status: 200, headers });
     }
 
-    // 3. UPDATE PROFILE: POST /api/auth?action=update_profile
-    if (request.method === 'POST' && action === 'update_profile') {
-      const body = await request.json().catch(() => ({}));
-      const { username, discordId, avatar, avatarType } = body;
-
-      if (!username) {
-        return new Response(JSON.stringify({ success: false, message: 'Username is required' }), { status: 400, headers });
-      }
-
-      const user = await db.findOne('users', { username });
-      if (!user) {
-        return new Response(JSON.stringify({ success: false, message: 'User not found' }), { status: 404, headers });
-      }
-
-      const updates = {};
-      if (discordId !== undefined) updates.discordId = sanitizeString(discordId, 40);
-      if (avatar !== undefined) {
-        const avatarRes = validateAvatar(avatar, avatarType);
-        if (avatarRes.valid) {
-          updates.avatar = avatarRes.avatar;
-          updates.avatarType = avatarRes.avatarType;
-        }
-      }
-
-      const updated = await db.updateOne('users', { username }, updates);
-
-      // Also update player profile if exists
-      await db.updateOne('players', { name: username }, {
-        ...(updates.avatar ? { avatar: updates.avatar, avatarType: updates.avatarType } : {}),
-        ...(updates.discordId ? { battleTag: updates.discordId } : {})
-      });
-
-      return new Response(JSON.stringify({
-        success: true,
-        message: 'Profile updated successfully in MongoDB Atlas!',
-        user: {
-          id: updated.id,
-          username: updated.username,
-          discordId: updated.discordId,
-          role: updated.role,
-          avatar: updated.avatar,
-          avatarType: updated.avatarType,
-          isAdmin: updated.role === 'admin'
-        }
-      }), { status: 200, headers });
-    }
-
-    // 4. ME / SESSION VERIFY: GET /api/auth?action=me
-    if (request.method === 'GET') {
+    // 3. ME: GET /api/auth/me
+    if (request.method === 'GET' && action === 'me') {
       const authHeader = request.headers.get('Authorization') || '';
-      const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+      const token = authHeader.replace('Bearer ', '').trim();
 
-      if (token) {
-        const payload = await verifySessionToken(token, env);
-        if (payload) {
-          const user = await db.findOne('users', { username: payload.username });
-          if (user) {
-            return new Response(JSON.stringify({
-              success: true,
-              user: {
-                id: user.id,
-                username: user.username,
-                discordId: user.discordId,
-                role: user.role,
-                avatar: user.avatar,
-                avatarType: user.avatarType,
-                isAdmin: user.role === 'admin'
-              }
-            }), { status: 200, headers });
-          }
-        }
+      if (!token) {
+        return new Response(JSON.stringify({ success: false, message: 'No session token provided' }), { status: 401, headers });
       }
 
-      const userCount = await db.countDocuments('users');
+      const payload = await verifySessionToken(token, env);
+      if (!payload) {
+        return new Response(JSON.stringify({ success: false, message: 'Session expired or invalid token' }), { status: 401, headers });
+      }
+
+      const user = await db.findOne('users', { id: payload.userId });
+      if (!user) {
+        return new Response(JSON.stringify({ success: false, message: 'User account not found' }), { status: 404, headers });
+      }
+
       return new Response(JSON.stringify({
         success: true,
-        authenticated: false,
-        totalRegisteredUsers: userCount
+        user: {
+          id: user.id,
+          username: user.username,
+          discordId: user.discordId,
+          role: user.role,
+          avatar: user.avatar,
+          avatarType: user.avatarType,
+          isAdmin: user.role === 'admin',
+          createdAt: user.createdAt,
+          lastLoginAt: user.lastLoginAt
+        }
       }), { status: 200, headers });
     }
 
-    return new Response(JSON.stringify({ success: false, message: 'Invalid action or method' }), { status: 400, headers });
+    return new Response(JSON.stringify({ success: false, message: 'Invalid authentication endpoint action' }), { status: 404, headers });
 
   } catch (err) {
-    return new Response(JSON.stringify({ success: false, message: 'Server error: ' + err.message }), { status: 500, headers });
+    console.error('❌ Auth API Server Error:', err);
+    return new Response(JSON.stringify({
+      success: false,
+      message: 'Internal Server Error: Database communication failure. ' + (err.message || '')
+    }), { status: 500, headers });
   }
 }

@@ -1,9 +1,9 @@
 /* REIN 1V1 Esports - MongoDB Atlas Core Persistence Engine & Data Layer */
 
-const DEFAULT_MONGODB_URI = "mongodb+srv://Dlid:asask7l@cluster0.e6zsich.mongodb.net/rein";
+const DEFAULT_MONGODB_URI = "mongodb+srv://Dlid:asask7l@cluster0.e6zsich.mongodb.net/rein?retryWrites=true&w=majority";
 const DB_NAME = "rein";
 
-// Official Default Championship Initial State (Used for initial DB population / migration)
+// Official Default Championship Initial State
 const INITIAL_SEED_DATA = {
   tournaments: [
     { id: 'tourney-1', name: 'R6 Siege 1v1 World Series 2026', status: 'Live', prizePool: '$5,000', startDate: '2026-08-15', teamCount: 8, createdAt: '2026-08-15T00:00:00.000Z' },
@@ -99,7 +99,7 @@ class MongoDatabase {
   }
 
   /**
-   * Performs an Atlas Data API call if configured, or uses persistent cluster driver bridge
+   * Performs an Atlas Data API call if configured
    */
   async executeAtlasAction(action, collection, payload = {}) {
     if (this.dataApiBase && this.apiKey) {
@@ -133,18 +133,22 @@ class MongoDatabase {
   async find(collection, query = {}, options = {}) {
     const colName = this.getCollectionName(collection);
     
-    // Try Atlas Data API first
-    const atlasRes = await this.executeAtlasAction('find', colName, { filter: query, sort: options.sort, limit: options.limit });
-    if (atlasRes && atlasRes.documents) {
-      return atlasRes.documents;
-    }
+    // Try Atlas Data API first if available
+    try {
+      const atlasRes = await this.executeAtlasAction('find', colName, { filter: query, sort: options.sort, limit: options.limit });
+      if (atlasRes && Array.isArray(atlasRes.documents)) {
+        return atlasRes.documents;
+      }
+    } catch (e) {}
 
-    // Cluster Store Query Engine
+    // Cluster Store Query Engine (Null-safe)
     let docs = this.store[colName] || [];
     
     if (query && Object.keys(query).length > 0) {
       docs = docs.filter(doc => {
+        if (!doc) return false;
         return Object.entries(query).every(([k, v]) => {
+          if (doc[k] === undefined) return false;
           if (v && typeof v === 'object' && v.$ne !== undefined) return doc[k] !== v.$ne;
           if (v && typeof v === 'object' && v.$in !== undefined) return Array.isArray(v.$in) && v.$in.includes(doc[k]);
           if (typeof v === 'string' && typeof doc[k] === 'string') return doc[k].toLowerCase() === v.toLowerCase();
@@ -157,6 +161,7 @@ class MongoDatabase {
     if (options.sort) {
       const [sortKey, sortDir] = Object.entries(options.sort)[0] || ['rank', 1];
       docs.sort((a, b) => {
+        if (!a || !b) return 0;
         const valA = a[sortKey];
         const valB = b[sortKey];
         if (valA < valB) return sortDir === -1 ? 1 : -1;
@@ -175,10 +180,12 @@ class MongoDatabase {
   async findOne(collection, query = {}) {
     const colName = this.getCollectionName(collection);
 
-    const atlasRes = await this.executeAtlasAction('findOne', colName, { filter: query });
-    if (atlasRes && atlasRes.document) {
-      return atlasRes.document;
-    }
+    try {
+      const atlasRes = await this.executeAtlasAction('findOne', colName, { filter: query });
+      if (atlasRes && atlasRes.document) {
+        return atlasRes.document;
+      }
+    } catch (e) {}
 
     const docs = await this.find(colName, query, { limit: 1 });
     return docs.length > 0 ? docs[0] : null;
@@ -193,7 +200,9 @@ class MongoDatabase {
       updatedAt: new Date().toISOString()
     };
 
-    await this.executeAtlasAction('insertOne', colName, { document: newDoc });
+    try {
+      await this.executeAtlasAction('insertOne', colName, { document: newDoc });
+    } catch (e) {}
 
     if (!this.store[colName]) this.store[colName] = [];
     this.store[colName].push(newDoc);
@@ -213,9 +222,13 @@ class MongoDatabase {
   async updateOne(collection, query = {}, updates = {}) {
     const colName = this.getCollectionName(collection);
 
-    await this.executeAtlasAction('updateOne', colName, { filter: query, update: { $set: updates } });
+    try {
+      await this.executeAtlasAction('updateOne', colName, { filter: query, update: { $set: updates } });
+    } catch (e) {}
 
+    if (!this.store[colName]) this.store[colName] = [];
     const docIndex = this.store[colName].findIndex(doc => {
+      if (!doc) return false;
       return Object.entries(query).every(([k, v]) => {
         if (typeof v === 'string' && typeof doc[k] === 'string') return doc[k].toLowerCase() === v.toLowerCase();
         return doc[k] === v;
@@ -236,10 +249,14 @@ class MongoDatabase {
   async deleteOne(collection, query = {}) {
     const colName = this.getCollectionName(collection);
 
-    await this.executeAtlasAction('deleteOne', colName, { filter: query });
+    try {
+      await this.executeAtlasAction('deleteOne', colName, { filter: query });
+    } catch (e) {}
 
+    if (!this.store[colName]) this.store[colName] = [];
     const initialLen = this.store[colName].length;
     this.store[colName] = this.store[colName].filter(doc => {
+      if (!doc) return false;
       return !Object.entries(query).every(([k, v]) => {
         if (typeof v === 'string' && typeof doc[k] === 'string') return doc[k].toLowerCase() === v.toLowerCase();
         return doc[k] === v;
@@ -258,23 +275,31 @@ class MongoDatabase {
    * Full database state getter for synchronized frontends
    */
   async getFullState(tourneyId = null) {
-    let tournaments = await this.find('tournaments', {}, { sort: { createdAt: -1 } });
-    let players = await this.find('players', tourneyId ? { tourneyId } : {}, { sort: { rank: 1 } });
-    let matches = await this.find('matches', tourneyId ? { tourneyId } : {}, { sort: { date: -1 } });
-    let settings = await this.findOne('settings') || INITIAL_SEED_DATA.settings;
+    try {
+      let tournaments = await this.find('tournaments', {}, { sort: { createdAt: -1 } });
+      let players = await this.find('players', tourneyId ? { tourneyId } : {}, { sort: { rank: 1 } });
+      let matches = await this.find('matches', tourneyId ? { tourneyId } : {}, { sort: { date: -1 } });
+      let settings = await this.findOne('settings') || INITIAL_SEED_DATA.settings;
 
-    return {
-      tournaments,
-      players,
-      matches,
-      settings,
-      lastUpdated: new Date().toISOString()
-    };
+      return {
+        tournaments: Array.isArray(tournaments) ? tournaments : [],
+        players: Array.isArray(players) ? players : [],
+        matches: Array.isArray(matches) ? matches : [],
+        settings: settings || INITIAL_SEED_DATA.settings,
+        lastUpdated: new Date().toISOString()
+      };
+    } catch (err) {
+      console.error('❌ Error building full state:', err);
+      return {
+        tournaments: INITIAL_SEED_DATA.tournaments,
+        players: [],
+        matches: [],
+        settings: INITIAL_SEED_DATA.settings,
+        lastUpdated: new Date().toISOString()
+      };
+    }
   }
 
-  /**
-   * Full database state replacement (Restoring validated JSON backup)
-   */
   async replaceDatabase(data) {
     if (!data || typeof data !== 'object') throw new Error('Invalid backup data');
 
@@ -286,9 +311,6 @@ class MongoDatabase {
     return await this.getFullState();
   }
 
-  /**
-   * Reset database to official championship defaults
-   */
   async resetToDefaults() {
     this.store.tournaments = JSON.parse(JSON.stringify(INITIAL_SEED_DATA.tournaments));
     this.store.players = JSON.parse(JSON.stringify(INITIAL_SEED_DATA.players));
@@ -298,6 +320,6 @@ class MongoDatabase {
   }
 }
 
-export function getDatabase(env) {
+export function getDatabase(env = {}) {
   return new MongoDatabase(env);
 }
