@@ -11,34 +11,8 @@ const INITIAL_SEED_DATA = {
     { id: 'tourney-3', name: 'Earthshatter Arena Season 1', status: 'Finished', prizePool: '$3,000', startDate: '2026-07-01', teamCount: 8, createdAt: '2026-07-01T00:00:00.000Z' },
     { id: 'tourney-4', name: 'Crusader Pro Invitational', status: 'Upcoming', prizePool: '$10,000', startDate: '2026-09-15', teamCount: 32, createdAt: '2026-09-15T00:00:00.000Z' }
   ],
-  players: [
-    { id: 'p-1', tourneyId: 'tourney-1', rank: 1, name: 'LHCloudy', battleTag: 'LHCloudy#2145', tier: 'Champion', elo: 2140, wins: 18, losses: 3, streak: 6, avatar: '👑', avatarType: 'emoji', group: 'Group A', lives: 2 },
-    { id: 'p-2', tourneyId: 'tourney-1', rank: 2, name: 'SuperTF', battleTag: 'SuperTF#1982', tier: 'Grandmaster', elo: 1870, wins: 15, losses: 6, streak: 3, avatar: '🛡️', avatarType: 'emoji', group: 'Group A', lives: 2 },
-    { id: 'p-3', tourneyId: 'tourney-1', rank: 3, name: 'Kaiser', battleTag: 'Kaiser#3312', tier: 'Master', elo: 1450, wins: 10, losses: 4, streak: 2, avatar: '🔨', avatarType: 'emoji', group: 'Group B', lives: 2 },
-    { id: 'p-4', tourneyId: 'tourney-1', rank: 4, name: 'Bumper', battleTag: 'Bumper#1109', tier: 'Diamond', elo: 1150, wins: 8, losses: 5, streak: 1, avatar: '💥', avatarType: 'emoji', group: 'Group B', lives: 2 },
-    { id: 'p-5', tourneyId: 'tourney-1', rank: 5, name: 'ReinGod', battleTag: 'ReinGod#8801', tier: 'Diamond', elo: 1080, wins: 7, losses: 4, streak: 2, avatar: '⚡', avatarType: 'emoji', group: 'Group C', lives: 2 },
-    { id: 'p-6', tourneyId: 'tourney-1', rank: 6, name: 'ShatterMaster', battleTag: 'ShatterM#3301', tier: 'Platinum', elo: 920, wins: 6, losses: 5, streak: 1, avatar: '🎯', avatarType: 'emoji', group: 'Group C', lives: 2 },
-    { id: 'p-7', tourneyId: 'tourney-1', rank: 7, name: 'ChargeDemon', battleTag: 'ChargeD#5512', tier: 'Platinum', elo: 810, wins: 5, losses: 6, streak: 0, avatar: '🚀', avatarType: 'emoji', group: 'Group D', lives: 2 },
-    { id: 'p-8', tourneyId: 'tourney-1', rank: 8, name: 'RookieR6', battleTag: 'RookieR6#5544', tier: 'Gold', elo: 500, wins: 2, losses: 7, streak: 0, avatar: '🛡️', avatarType: 'emoji', group: 'Group D', lives: 2 },
-    
-    // Players for Tournament 2 (Hammer King Clash #12)
-    { id: 'p-9', tourneyId: 'tourney-2', rank: 1, name: 'Ammar', battleTag: 'Ammar#7711', tier: 'Grandmaster', elo: 1920, wins: 12, losses: 2, streak: 5, avatar: '👑', avatarType: 'emoji', group: 'Group A', lives: 2 },
-    { id: 'p-10', tourneyId: 'tourney-2', rank: 2, name: 'Fahad', battleTag: 'Fahad#9901', tier: 'Grandmaster', elo: 1750, wins: 11, losses: 3, streak: 4, avatar: '⚡', avatarType: 'emoji', group: 'Group A', lives: 2 },
-    { id: 'p-11', tourneyId: 'tourney-2', rank: 3, name: 'Vortex', battleTag: 'Vortex#4412', tier: 'Master', elo: 1510, wins: 9, losses: 4, streak: 2, avatar: '💥', avatarType: 'emoji', group: 'Group B', lives: 2 },
-    { id: 'p-12', tourneyId: 'tourney-2', rank: 4, name: 'GhostDuelist', battleTag: 'Ghost#1211', tier: 'Master', elo: 1390, wins: 8, losses: 5, streak: 1, avatar: '🛡️', avatarType: 'emoji', group: 'Group B', lives: 2 },
-    { id: 'p-13', tourneyId: 'tourney-2', rank: 5, name: 'IronClad', battleTag: 'Iron#3322', tier: 'Diamond', elo: 1240, wins: 7, losses: 4, streak: 1, avatar: '🔨', avatarType: 'emoji', group: 'Group C', lives: 2 },
-    { id: 'p-14', tourneyId: 'tourney-2', rank: 6, name: 'ShadowStrike', battleTag: 'Shadow#8899', tier: 'Platinum', elo: 960, wins: 5, losses: 5, streak: 0, avatar: '🎯', avatarType: 'emoji', group: 'Group C', lives: 2 },
-    { id: 'p-15', tourneyId: 'tourney-2', rank: 7, name: 'BlazeFury', battleTag: 'Blaze#6655', tier: 'Gold', elo: 680, wins: 4, losses: 6, streak: 1, avatar: '🚀', avatarType: 'emoji', group: 'Group D', lives: 2 },
-    { id: 'p-16', tourneyId: 'tourney-2', rank: 8, name: 'TitanShield', battleTag: 'Titan#1122', tier: 'Gold', elo: 500, wins: 1, losses: 5, streak: 0, avatar: '🛡️', avatarType: 'emoji', group: 'Group D', lives: 2 }
-  ],
-  matches: [
-    { id: 'm-1', tourneyId: 'tourney-1', p1: 'LHCloudy', p2: 'SuperTF', score: '10 - 4', scoreP1: 10, scoreP2: 4, winner: 'LHCloudy', loser: 'SuperTF', eloChangeP1: 28, eloChangeP2: -20, date: '2026-08-30' },
-    { id: 'm-2', tourneyId: 'tourney-1', p1: 'Kaiser', p2: 'Bumper', score: '10 - 7', scoreP1: 10, scoreP2: 7, winner: 'Kaiser', loser: 'Bumper', eloChangeP1: 20, eloChangeP2: -12, date: '2026-08-29' },
-    { id: 'm-3', tourneyId: 'tourney-1', p1: 'ReinGod', p2: 'ShatterMaster', score: '10 - 8', scoreP1: 10, scoreP2: 8, winner: 'ReinGod', loser: 'ShatterMaster', eloChangeP1: 18, eloChangeP2: -14, date: '2026-08-28' },
-    { id: 'm-4', tourneyId: 'tourney-1', p1: 'ChargeDemon', p2: 'RookieR6', score: '10 - 2', scoreP1: 10, scoreP2: 2, winner: 'ChargeDemon', loser: 'RookieR6', eloChangeP1: 25, eloChangeP2: -10, date: '2026-08-27' },
-    { id: 'm-5', tourneyId: 'tourney-2', p1: 'Ammar', p2: 'Fahad', score: '10 - 6', scoreP1: 10, scoreP2: 6, winner: 'Ammar', loser: 'Fahad', eloChangeP1: 22, eloChangeP2: -15, date: '2026-09-01' },
-    { id: 'm-6', tourneyId: 'tourney-2', p1: 'Vortex', p2: 'GhostDuelist', score: '10 - 5', scoreP1: 10, scoreP2: 5, winner: 'Vortex', loser: 'GhostDuelist', eloChangeP1: 19, eloChangeP2: -13, date: '2026-08-31' }
-  ],
+  players: [],
+  matches: [],
   settings: {
     maintenanceMode: false,
     siteTitle: 'REIN 1V1 Esports Championship',
