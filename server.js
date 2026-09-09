@@ -1,16 +1,22 @@
-/* REIN 1V1 Esports - High Performance Dual HTTP (80) & HTTPS (443) Production Server */
+/* REIN 1V1 Esports - High Performance Dynamic Multi-Port Production Server */
 const http = require('http');
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
-const selfsigned = require('selfsigned');
+let selfsigned;
+try {
+  selfsigned = require('selfsigned');
+} catch (e) {
+  console.warn('selfsigned module optional load:', e.message);
+}
 
-const HTTP_PORT = process.env.PORT || 80;
-const HTTPS_PORT = process.env.HTTPS_PORT || 443;
+const HTTP_PORT = parseInt(process.env.PORT) || 80;
+const HTTPS_PORT = parseInt(process.env.HTTPS_PORT) || 443;
+const ALT_HTTP_PORT = parseInt(process.env.ALT_PORT) || 49532;
 const PUBLIC_DIR = __dirname;
 
-// Generate SSL cert dynamically if cert files don't exist
+// Generate or load SSL cert
 const sslDir = path.join(__dirname, 'ssl');
 if (!fs.existsSync(sslDir)) {
   fs.mkdirSync(sslDir, { recursive: true });
@@ -20,30 +26,35 @@ const keyPath = path.join(sslDir, 'key.pem');
 const certPath = path.join(sslDir, 'cert.pem');
 
 if (!fs.existsSync(keyPath) || !fs.existsSync(certPath)) {
-  console.log('🔒 Generating SSL certificates for rein1v1.com...');
-  const attrs = [{ name: 'commonName', value: 'rein1v1.com' }];
-  const pems = selfsigned.generate(attrs, {
-    days: 3650,
-    keySize: 2048,
-    algorithm: 'sha256',
-    extensions: [{
-      name: 'subjectAltName',
-      altNames: [
-        { type: 2, value: 'rein1v1.com' },
-        { type: 2, value: 'www.rein1v1.com' },
-        { type: 2, value: 'localhost' }
-      ]
-    }]
-  });
-  fs.writeFileSync(keyPath, pems.private);
-  fs.writeFileSync(certPath, pems.cert);
-  console.log('✅ SSL certificate generated successfully in ./ssl/');
+  if (selfsigned) {
+    console.log('🔒 Generating SSL certificates for rein1v1.com...');
+    const attrs = [{ name: 'commonName', value: 'rein1v1.com' }];
+    const pems = selfsigned.generate(attrs, {
+      days: 3650,
+      keySize: 2048,
+      algorithm: 'sha256',
+      extensions: [{
+        name: 'subjectAltName',
+        altNames: [
+          { type: 2, value: 'rein1v1.com' },
+          { type: 2, value: 'www.rein1v1.com' },
+          { type: 2, value: 'localhost' }
+        ]
+      }]
+    });
+    fs.writeFileSync(keyPath, pems.private);
+    fs.writeFileSync(certPath, pems.cert);
+    console.log('✅ SSL certificate generated successfully in ./ssl/');
+  }
 }
 
-const sslOptions = {
-  key: fs.readFileSync(keyPath),
-  cert: fs.readFileSync(certPath)
-};
+let sslOptions = null;
+if (fs.existsSync(keyPath) && fs.existsSync(certPath)) {
+  sslOptions = {
+    key: fs.readFileSync(keyPath),
+    cert: fs.readFileSync(certPath)
+  };
+}
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=UTF-8',
@@ -116,18 +127,34 @@ function handleRequest(req, res) {
   });
 }
 
-// 1. Start HTTP Server on Port 80
+// 1. Primary HTTP Server (Port 80)
 const httpServer = http.createServer(handleRequest);
 httpServer.listen(HTTP_PORT, () => {
-  console.log(`🚀 REIN 1V1 HTTP Server running on port ${HTTP_PORT}`);
+  console.log(`🚀 REIN 1V1 HTTP Server running on primary port ${HTTP_PORT}`);
+}).on('error', (err) => {
+  console.warn(`Primary HTTP Port ${HTTP_PORT} warning:`, err.message);
 });
 
-// 2. Start HTTPS Server on Port 443 (Fixes Cloudflare 525 Handshake Error!)
-try {
-  const httpsServer = https.createServer(sslOptions, handleRequest);
-  httpsServer.listen(HTTPS_PORT, () => {
-    console.log(`🔒 REIN 1V1 HTTPS Server running on port ${HTTPS_PORT} (SSL Handshake Ready)`);
+// 2. Alternative HTTP Server (Port 49532 for NAT VPS forwarding)
+if (ALT_HTTP_PORT !== HTTP_PORT) {
+  const altServer = http.createServer(handleRequest);
+  altServer.listen(ALT_HTTP_PORT, () => {
+    console.log(`📡 REIN 1V1 NAT HTTP Server running on NAT port ${ALT_HTTP_PORT}`);
+  }).on('error', (err) => {
+    console.warn(`NAT Port ${ALT_HTTP_PORT} warning:`, err.message);
   });
-} catch (e) {
-  console.error('HTTPS Port 443 warning:', e.message);
+}
+
+// 3. HTTPS Server (Port 443)
+if (sslOptions) {
+  try {
+    const httpsServer = https.createServer(sslOptions, handleRequest);
+    httpsServer.listen(HTTPS_PORT, () => {
+      console.log(`🔒 REIN 1V1 HTTPS Server running on SSL port ${HTTPS_PORT}`);
+    }).on('error', (err) => {
+      console.warn(`HTTPS Port ${HTTPS_PORT} warning:`, err.message);
+    });
+  } catch (e) {
+    console.error('HTTPS init error:', e.message);
+  }
 }
