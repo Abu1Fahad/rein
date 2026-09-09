@@ -255,10 +255,16 @@ const App = (function() {
   let accountAvatarData = null;
 
   function togglePassword(inputId, btnElem) {
-    let input = document.getElementById(inputId);
+    let input = null;
+    if (typeof inputId === 'string' && inputId) {
+      input = document.getElementById(inputId);
+    }
+    if (!input && btnElem) {
+      input = btnElem.previousElementSibling || btnElem.parentElement.querySelector('input');
+    }
     if (!input && typeof inputId === 'string') {
-      if (inputId.includes('login')) input = document.getElementById('login-pass');
       if (inputId.includes('signup')) input = document.getElementById('signup-pass');
+      if (inputId.includes('login')) input = document.getElementById('login-pass');
     }
     if (!input) return;
 

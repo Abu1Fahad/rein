@@ -9,6 +9,11 @@ const Leaderboard = (function() {
   function init(tourneyId) {
     activeTourneyId = tourneyId || 'all';
     render();
+    if (typeof DataStore !== 'undefined' && typeof DataStore.onDataChange === 'function') {
+      DataStore.onDataChange(() => {
+        render();
+      });
+    }
   }
 
   function setTourney(tourneyId) {

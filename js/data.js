@@ -1038,8 +1038,25 @@ const DataStore = (function() {
 
   loadLocal();
 
+  // Automatic Live MongoDB Background Synchronization Loop (Every 6 seconds & on tab focus)
+  if (typeof window !== 'undefined') {
+    setTimeout(() => { initCloudSync(); }, 300);
+    setInterval(() => { initCloudSync(); }, 6000);
+
+    window.addEventListener('focus', () => {
+      initCloudSync();
+    });
+
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) {
+        initCloudSync();
+      }
+    });
+  }
+
   const dataStoreInstance = {
     initCloudSync,
+    notifyDataChanged,
     getSyncStatus,
     onSyncChange,
     onDataChange,
@@ -1077,3 +1094,4 @@ const DataStore = (function() {
 if (typeof window !== 'undefined') {
   window.DataStore = DataStore;
 }
+
