@@ -200,12 +200,26 @@ class MongoDatabase {
       updatedAt: new Date().toISOString()
     };
 
-    try {
-      await this.executeAtlasAction('insertOne', colName, { document: newDoc });
-    } catch (e) {}
+    let atlasSuccess = false;
+    if (this.dataApiBase && this.apiKey) {
+      const res = await this.executeAtlasAction('insertOne', colName, { document: newDoc });
+      if (res && (res.insertedId || res.insertedIds)) {
+        atlasSuccess = true;
+      } else {
+        throw new Error(`MongoDB Atlas Data API insert failed for collection: ${colName}`);
+      }
+    }
 
     if (!this.store[colName]) this.store[colName] = [];
-    this.store[colName].push(newDoc);
+    
+    // Check duplicate ID in store
+    const existingIdx = this.store[colName].findIndex(d => d && d.id === newDoc.id);
+    if (existingIdx !== -1) {
+      this.store[colName][existingIdx] = newDoc;
+    } else {
+      this.store[colName].push(newDoc);
+    }
+    
     return newDoc;
   }
 
