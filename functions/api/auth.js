@@ -2,8 +2,15 @@
 import { getDatabase } from '../_lib/db.js';
 import { hashPassword, verifyPassword, signSessionToken, verifySessionToken } from '../_lib/auth.js';
 import { sanitizeString, validateAvatar } from '../_lib/validators.js';
+import { proxyToVPS } from '../_lib/proxy.js';
 
 export async function onRequest(context) {
+  // Attempt transparent proxying to live VPS backend running server.js
+  const vpsResponse = await proxyToVPS(context);
+  if (vpsResponse) {
+    return vpsResponse;
+  }
+
   const { request, env } = context;
   const url = new URL(request.url);
   const pathname = url.pathname;

@@ -45,20 +45,30 @@ async function getMongoDB() {
   }
 }
 
-// Simple PBKDF2 Password Hashing
-function hashPassword(password) {
-  const salt = 'rein1v1salt0000';
-  return crypto.pbkdf2Sync(password, salt, 10000, 32, 'sha256').toString('hex');
+// Standard PBKDF2 Password Hashing & Verification (100,000 Iterations)
+function hashPassword(password, salt = null) {
+  if (!salt) salt = crypto.randomBytes(16).toString('hex');
+  const hashHex = crypto.pbkdf2Sync(password, salt, 100000, 32, 'sha256').toString('hex');
+  return `pbkdf2$100000$${salt}$${hashHex}`;
 }
 
 function verifyPassword(password, storedHash) {
   if (!storedHash) return false;
-  if (storedHash.includes('$')) {
-    const parts = storedHash.split('$');
-    const hash = parts[parts.length - 1];
-    return hashPassword(password) === hash;
+  try {
+    if (storedHash.startsWith('pbkdf2$')) {
+      const parts = storedHash.split('$');
+      const iterations = parseInt(parts[1]) || 100000;
+      const salt = parts[2];
+      const originalHash = parts[3];
+      const computedHash = crypto.pbkdf2Sync(password, salt, iterations, 32, 'sha256').toString('hex');
+      return crypto.timingSafeEqual(Buffer.from(computedHash, 'hex'), Buffer.from(originalHash, 'hex'));
+    }
+    // Legacy simple hash fallback
+    const legacyHash = crypto.pbkdf2Sync(password, 'rein1v1salt0000', 10000, 32, 'sha256').toString('hex');
+    return storedHash === legacyHash;
+  } catch (e) {
+    return false;
   }
-  return hashPassword(password) === storedHash;
 }
 
 // Generate SSL cert dynamically if cert files don't exist
@@ -152,6 +162,56 @@ async function handleApiRequest(req, res, url) {
     } catch (e) {
       body = {};
     }
+  }
+
+  // 0. POST /api/db_action - Generic DB Proxy for Cloudflare Pages Functions
+  if (req.method === 'POST' && pathname === '/api/db_action') {
+    if (!db) {
+      res.writeHead(500, headers);
+      res.end(JSON.stringify({ success: false, message: 'MongoDB connection offline' }));
+      return;
+    }
+    const { action, collection, payload } = body;
+    try {
+      if (action === 'insertOne') {
+        const doc = payload.document;
+        const result = await db.collection(collection).insertOne(doc);
+        res.writeHead(201, headers);
+        res.end(JSON.stringify({ success: true, insertedId: result.insertedId }));
+        return;
+      }
+      if (action === 'findOne') {
+        const doc = await db.collection(collection).findOne(payload.filter || {});
+        res.writeHead(200, headers);
+        res.end(JSON.stringify({ success: true, document: doc }));
+        return;
+      }
+      if (action === 'find') {
+        const docs = await db.collection(collection).find(payload.filter || {}).sort(payload.sort || {}).limit(payload.limit || 0).toArray();
+        res.writeHead(200, headers);
+        res.end(JSON.stringify({ success: true, documents: docs }));
+        return;
+      }
+      if (action === 'updateOne') {
+        const result = await db.collection(collection).updateOne(payload.filter || {}, payload.update || {});
+        res.writeHead(200, headers);
+        res.end(JSON.stringify({ success: true, modifiedCount: result.modifiedCount }));
+        return;
+      }
+      if (action === 'deleteOne') {
+        const result = await db.collection(collection).deleteOne(payload.filter || {});
+        res.writeHead(200, headers);
+        res.end(JSON.stringify({ success: true, deletedCount: result.deletedCount }));
+        return;
+      }
+      res.writeHead(400, headers);
+      res.end(JSON.stringify({ success: false, message: 'Unknown db_action action' }));
+    } catch (err) {
+      console.error('❌ Proxy DB Action Error:', err);
+      res.writeHead(500, headers);
+      res.end(JSON.stringify({ success: false, message: err.message }));
+    }
+    return;
   }
 
   // 1. GET /api/data - Full DB State from MongoDB Atlas
@@ -365,12 +425,20 @@ httpServer.listen(HTTP_PORT, () => {
 // 2. Alternative HTTP Server (Port 49532 for NAT VPS forwarding)
 if (ALT_HTTP_PORT !== HTTP_PORT) {
   const altServer = http.createServer(handleRequest);
-  altServer.listen(ALT_HTTP_PORT, () => {
+  altServer.listen(ALT_HTTP_PORT, '0.0.0.0', () => {
     console.log(`📡 REIN 1V1 NAT HTTP Server running on NAT port ${ALT_HTTP_PORT}`);
   }).on('error', (err) => {
     console.warn(`NAT Port ${ALT_HTTP_PORT} warning:`, err.message);
   });
 }
+
+// 3. API Proxy Server (Port 8080)
+const proxyServer = http.createServer(handleRequest);
+proxyServer.listen(8080, '0.0.0.0', () => {
+  console.log(`🌐 REIN 1V1 API Proxy Server running on port 8080`);
+}).on('error', (err) => {
+  console.warn(`Port 8080 warning:`, err.message);
+});
 
 // 3. HTTPS Server (Port 443)
 if (sslOptions) {

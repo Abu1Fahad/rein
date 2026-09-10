@@ -75,6 +75,7 @@ class MongoDatabase {
     this.appId = env.MONGODB_APP_ID || null;
     this.apiKey = env.MONGODB_API_KEY || null;
     this.dataApiBase = env.MONGODB_DATA_API_URL || null;
+    this.originUrl = env.MONGODB_ORIGIN_URL || env.BACKEND_API_URL || null;
     
     // Persistent document store layer
     if (!globalThis.__mongoMemoryStore) {
@@ -99,7 +100,7 @@ class MongoDatabase {
   }
 
   /**
-   * Performs an Atlas Data API call if configured
+   * Performs an Atlas Data API call or VPS Origin Proxy call if configured
    */
   async executeAtlasAction(action, collection, payload = {}) {
     if (this.dataApiBase && this.apiKey) {
@@ -125,6 +126,22 @@ class MongoDatabase {
         console.warn(`[MongoDB Atlas API Warning] ${action} on ${collection}:`, err.message);
       }
     }
+
+    if (this.originUrl) {
+      try {
+        const response = await fetch(`${this.originUrl.replace(/\/$/, '')}/api/db_action`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action, collection, payload })
+        });
+        if (response.ok) {
+          return await response.json();
+        }
+      } catch (err) {
+        console.warn(`[VPS Origin Proxy Warning] ${action} on ${collection}:`, err.message);
+      }
+    }
+
     return null;
   }
 
@@ -201,13 +218,19 @@ class MongoDatabase {
     };
 
     let atlasSuccess = false;
-    if (this.dataApiBase && this.apiKey) {
+    if ((this.dataApiBase && this.apiKey) || this.originUrl) {
       const res = await this.executeAtlasAction('insertOne', colName, { document: newDoc });
-      if (res && (res.insertedId || res.insertedIds)) {
+      if (res && (res.insertedId || res.insertedIds || res.success)) {
         atlasSuccess = true;
       } else {
-        throw new Error(`MongoDB Atlas Data API insert failed for collection: ${colName}`);
+        throw new Error(`MongoDB Atlas Data API / Origin insert failed for collection: ${colName}`);
       }
+    } else if (typeof process !== 'undefined' && process.env && process.env.MONGODB_URI) {
+      // Node.js environment with native MongoClient
+      atlasSuccess = true;
+    } else {
+      // Cloudflare Pages Worker without database connection configured
+      throw new Error(`MongoDB Atlas write failed: No active persistent database connection (MONGODB_DATA_API_URL / MONGODB_ORIGIN_URL) configured in Cloudflare Pages environment.`);
     }
 
     if (!this.store[colName]) this.store[colName] = [];

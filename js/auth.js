@@ -119,43 +119,11 @@ const Auth = (function() {
       }
       return { success: false, message: data.message || 'Registration failed' };
     } catch (e) {
-      console.warn('Sign-up API offline fallback:', e);
-      const lower = cleanUsername.toLowerCase();
-      const isAdmin = lower === 'admin' || lower === 'fahad' || lower === 'owner' || password === 'rein1v1dev' || password === 'admin123456';
-      const user = {
-        id: 'u-' + Date.now(),
-        username: cleanUsername,
-        discordId: discordId ? discordId.trim() : '',
-        role: isAdmin ? 'admin' : 'player',
-        isAdmin: isAdmin,
-        avatar: avatar || (lower === 'fahad' ? '⚡' : (isAdmin ? '👑' : '🛡️')),
-        avatarType: avatarType || (avatar && avatar.startsWith('data:') ? 'image' : 'emoji')
+      console.error('Sign-up API connection error:', e);
+      return {
+        success: false,
+        message: 'Could not connect to authentication server. Account registration requires an active database connection.'
       };
-      currentUser = user;
-      localStorage.setItem(TOKEN_KEY, 'local_dev_session_' + Date.now());
-      saveSession();
-
-      if (typeof DataStore !== 'undefined') {
-        try {
-          DataStore.addPlayer({
-            id: 'p-' + Date.now(),
-            tourneyId: 'tourney-1',
-            rank: 99,
-            name: cleanUsername,
-            battleTag: discordId ? discordId.trim() : `${cleanUsername}#0000`,
-            tier: 'Gold',
-            elo: 500,
-            wins: 0,
-            losses: 0,
-            streak: 0,
-            avatar: user.avatar,
-            group: 'Group A',
-            lives: 2
-          });
-        } catch (e) {}
-      }
-
-      return { success: true, user: currentUser };
     }
   }
 

@@ -2,8 +2,12 @@
 import { getDatabase } from '../_lib/db.js';
 import { requireAdmin } from '../_lib/auth.js';
 import { getRankFromElo } from '../_lib/elo.js';
+import { proxyToVPS } from '../_lib/proxy.js';
 
 export async function onRequest(context) {
+  const vpsResponse = await proxyToVPS(context);
+  if (vpsResponse) return vpsResponse;
+
   const { request, env } = context;
   const url = new URL(request.url);
   const db = getDatabase(env);
