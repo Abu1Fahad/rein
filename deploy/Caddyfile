@@ -1,0 +1,20 @@
+# Caddy gets and renews the HTTPS certificate for the domain automatically.
+{$DOMAIN} {
+	# Compress everything except the live-updates stream.
+	@compress not path /api/events
+	encode @compress zstd gzip
+
+	reverse_proxy app:3000 {
+		# Live updates (Server-Sent Events) must not be buffered.
+		flush_interval -1
+	}
+
+	header {
+		-Server
+	}
+}
+
+# www.rein1v1.com → rein1v1.com
+www.{$DOMAIN} {
+	redir https://{$DOMAIN}{uri} permanent
+}

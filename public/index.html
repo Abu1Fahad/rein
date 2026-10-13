@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>REIN 1V1</title>
+  <meta name="description" content="Reinhardt 1v1 tournament — SR leaderboard, brackets and Discord registration.">
+  <meta name="theme-color" content="#232b45">
+  <link rel="icon" href="/img/favicon.svg" type="image/svg+xml">
+  <script>
+    // Apply the saved theme before anything paints (no light flash in dark mode).
+    try {
+      var th = localStorage.getItem('rein.theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      document.documentElement.dataset.theme = th;
+      if (th === 'dark') document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0b0f1c');
+    } catch (e) { document.documentElement.dataset.theme = 'light'; }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,600;0,700;0,800;1,700;1,800&family=Barlow+Semi+Condensed:wght@500;600;700;800&family=Cairo:wght@500;600;700;800&display=swap" media="print" onload="this.media='all'">
+  <link rel="stylesheet" href="/css/ow.css">
+</head>
+<body>
+  <div class="bg" aria-hidden="true">
+    <div class="bg-grad"></div>
+    <svg class="bg-shapes" viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMid slice">
+      <polygon class="tri t1" points="760,40 1240,880 280,880"/>
+      <polygon class="tri t2" points="1180,-80 1720,620 980,560"/>
+      <polygon class="tri t3" points="120,980 560,300 760,1040"/>
+      <polygon class="tri t4" points="1500,1000 1180,360 1700,420"/>
+      <circle class="ring" cx="1140" cy="300" r="250"/>
+    </svg>
+    <canvas id="embers"></canvas>
+    <div class="bg-vignette"></div>
+  </div>
+
+  <!-- shared SVG gradients (rank badges, charts) -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <linearGradient id="rk-unranked" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#c3c9d6"/><stop offset="1" stop-color="#6b7388"/></linearGradient>
+      <linearGradient id="rk-bronze" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f0a46b"/><stop offset="1" stop-color="#7a4420"/></linearGradient>
+      <linearGradient id="rk-silver" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#8c97a9"/></linearGradient>
+      <linearGradient id="rk-gold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe08a"/><stop offset="1" stop-color="#c0841a"/></linearGradient>
+      <linearGradient id="rk-platinum" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#d4f6ff"/><stop offset="1" stop-color="#4a9db4"/></linearGradient>
+      <linearGradient id="rk-diamond" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#c9d9ff"/><stop offset="1" stop-color="#4362d8"/></linearGradient>
+      <linearGradient id="rk-master" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b8ffe6"/><stop offset="1" stop-color="#1f9a76"/></linearGradient>
+      <linearGradient id="rk-grandmaster" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f0dcff"/><stop offset="1" stop-color="#7d4fd8"/></linearGradient>
+      <linearGradient id="rk-champion" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffd18a"/><stop offset="1" stop-color="#e0501a"/></linearGradient>
+      <linearGradient id="rk-top500" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff9d6a"/><stop offset="1" stop-color="#a3201a"/></linearGradient>
+      <linearGradient id="sparkFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f46b1d" stop-opacity=".45"/><stop offset="1" stop-color="#f46b1d" stop-opacity="0"/></linearGradient>
+      <linearGradient id="trophyGold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff2b8"/><stop offset=".55" stop-color="#f7c64a"/><stop offset="1" stop-color="#b9821c"/></linearGradient>
+    </defs>
+  </svg>
+
+  <div class="hud-clock" id="hud-clock"></div>
+
+  <div class="shell">
+    <nav class="tabbar" id="tabbar"></nav>
+    <div class="announce" id="announce" hidden></div>
+    <main id="view"></main>
+  </div>
+
+  <footer class="hints" id="hints"></footer>
+  <nav class="mnav" id="mnav" aria-label="Menu"></nav>
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+
+  <noscript><p style="padding:40px">This site needs JavaScript.</p></noscript>
+  <script type="importmap">
+    { "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+    } }
+  </script>
+  <link rel="modulepreload" href="/js/lib.js">
+  <link rel="modulepreload" href="/js/i18n.js">
+  <link rel="modulepreload" href="/js/fx.js">
+  <link rel="modulepreload" href="/js/components.js">
+  <link rel="modulepreload" href="/js/tilt.js">
+  <link rel="modulepreload" href="/js/model3d.js">
+  <link rel="modulepreload" href="/js/pages/leaderboard.js">
+  <script type="module" src="/js/app.js"></script>
+</body>
+</html>

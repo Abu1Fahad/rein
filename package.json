@@ -1,6 +1,20 @@
 {
+  "name": "rein-1v1",
+  "version": "1.0.0",
+  "description": "Reinhardt 1v1 tournament site — SR leaderboard, brackets, admin panel and Discord registration bot.",
+  "type": "module",
+  "main": "server/index.js",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning server/index.js",
+    "dev": "node --disable-warning=ExperimentalWarning --watch server/index.js",
+    "seed": "node --disable-warning=ExperimentalWarning scripts/seed-demo.js",
+    "check:bot": "node --disable-warning=ExperimentalWarning scripts/check-bot.js"
+  },
   "dependencies": {
-    "mongodb": "^7.6.0",
-    "selfsigned": "^5.5.0"
+    "discord.js": "^14.27.0",
+    "express": "^4.22.3"
   }
 }
